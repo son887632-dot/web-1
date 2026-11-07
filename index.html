@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Web Source Viewer — Lấy mã HTML</title>
+<style>
+  :root{
+    --yellow:#FFD60A; --yellow-deep:#FFC300; --yellow-soft:#FFF8D6;
+    --yellow-line:#F2E2A0; --ink:#1e1e1c; --muted:#7a7a70;
+    --white:#fff; --bg:#FFFDF3;
+    --code-bg:#1e1e1c; --code-fg:#e8e8e0;
+    --shadow:0 10px 30px rgba(200,165,0,.15);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+    background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased;min-height:100dvh}
+
+  header{padding:20px 20px 12px;text-align:center;
+    background:linear-gradient(180deg,#FFF8D6 0%,transparent 100%);
+    border-bottom:1px solid var(--yellow-line)}
+  header h1{margin:0 0 6px;font-size:22px;display:flex;align-items:center;justify-content:center;gap:10px}
+  header .logo{width:42px;height:42px;border-radius:12px;
+    background:linear-gradient(135deg,var(--yellow),var(--yellow-deep));
+    display:inline-grid;place-items:center;font-weight:800;font-size:15px;color:#3a2f00;
+    box-shadow:0 6px 16px rgba(255,195,0,.45)}
+  header p{margin:0;color:var(--muted);font-size:13.5px}
+
+  main{max-width:1000px;margin:0 auto;padding:20px 16px 80px}
+
+  .url-bar{display:flex;gap:10px;background:var(--white);border:1px solid var(--yellow-line);
+    border-radius:16px;padding:8px;box-shadow:var(--shadow);margin-bottom:12px}
+  .url-bar input{flex:1;border:0;outline:none;padding:12px 14px;font-size:15px;
+    background:transparent;color:var(--ink);min-width:0}
+  .url-bar input::placeholder{color:#b8b0a0}
+  .url-bar button{border-radius:10px;font-weight:700;cursor:pointer;transition:.15s;white-space:nowrap}
+  .paste-btn{border:1px solid var(--yellow-line);background:var(--yellow-soft);
+    color:#6b5a00;padding:0 14px;font-size:13px}
+  .paste-btn:hover{background:#FFF1B8}
+  .fetch-btn{border:0;background:linear-gradient(135deg,var(--yellow),var(--yellow-deep));
+    color:#3a2f00;padding:0 20px;font-size:14.5px;
+    box-shadow:0 6px 16px rgba(255,195,0,.4)}
+  .fetch-btn:hover{transform:translateY(-1px)}
+  .fetch-btn:disabled{opacity:.6;cursor:wait;transform:none}
+
+  .history{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:18px}
+  .history:empty{display:none}
+  .history-chip{border:1px solid var(--yellow-line);background:var(--white);
+    color:var(--muted);border-radius:999px;padding:5px 12px;font-size:12px;
+    font-weight:600;cursor:pointer;transition:.15s;max-width:260px;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .history-chip:hover{background:var(--yellow-soft);color:#3a2f00}
+
+  .info-box{background:#FFF9E0;border:1px solid var(--yellow-line);
+    border-left:4px solid var(--yellow-deep);border-radius:12px;padding:12px 14px;
+    font-size:12.5px;color:#6b5a00;line-height:1.6;margin-bottom:16px}
+  .info-box strong{display:block;margin-bottom:4px;color:#3a2f00}
+
+  .status{margin-bottom:12px;font-size:13px;min-height:20px;color:var(--muted);
+    display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .status.error{color:#c0392b;font-weight:700}
+  .status.ok{color:#1e7d3a;font-weight:700}
+  .status.loading{color:#b8860b;font-weight:700}
+  .spinner{width:14px;height:14px;border:2px solid rgba(184,134,11,.25);
+    border-top-color:#b8860b;border-radius:50%;animation:spin .7s linear infinite;display:inline-block}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  .toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center}
+  .toolbar button{border:1px solid var(--yellow-line);background:var(--white);color:var(--ink);
+    font-weight:700;font-size:13px;padding:8px 14px;border-radius:10px;cursor:pointer;transition:.15s}
+  .toolbar button:hover{background:var(--yellow-soft)}
+  .toolbar button:disabled{opacity:.4;cursor:not-allowed}
+  .stats{margin-left:auto;font-size:12.5px;color:var(--muted);font-weight:600}
+
+  .empty{text-align:center;padding:40px 20px;color:var(--muted);font-size:14px;
+    background:var(--white);border:2px dashed var(--yellow-line);border-radius:16px}
+
+  .code-wrap{background:var(--code-bg);border-radius:16px;border:1px solid #333;
+    overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,.2);display:none}
+  .code-wrap.active{display:block}
+  .code-wrap pre{margin:0;padding:18px;font-family:"SF Mono",Menlo,Consolas,"Courier New",monospace;
+    font-size:13px;line-height:1.55;color:var(--code-fg);max-height:65vh;overflow:auto;
+    white-space:pre;tab-size:2}
+  .code-wrap pre::-webkit-scrollbar{width:10px;height:10px}
+  .code-wrap pre::-webkit-scrollbar-thumb{background:#444;border-radius:5px}
+  .code-wrap pre::-webkit-scrollbar-track{background:#2a2a2a}
+
+  .t-tag{color:#FFD60A}
+  .t-comment{color:#6b7280;font-style:italic}
+
+  .toast{position:fixed;left:50%;bottom:26px;transform:translate(-50%,20px);
+    background:#1e1e1c;color:#fff;padding:12px 20px;border-radius:12px;
+    font-size:14px;font-weight:700;opacity:0;pointer-events:none;transition:.25s;
+    z-index:999;max-width:90vw;text-align:center}
+  .toast.show{opacity:1;transform:translate(-50%,0)}
+
+  @media(max-width:560px){
+    .url-bar{flex-wrap:wrap}
+    .url-bar input{width:100%;flex-basis:100%}
+    .url-bar .fetch-btn{flex:1;padding:10px}
+    .url-bar .paste-btn{padding:10px}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1><span class="logo">&lt;/&gt;</span> Web Source Viewer</h1>
+  <p>Dán link vào để lấy toàn bộ mã HTML của trang web đó</p>
+</header>
+
+<main>
+  <div class="url-bar">
+    <input id="urlInput" type="text" placeholder="https://example.com" spellcheck="false" autocomplete="off" />
+    <button class="paste-btn" id="pasteBtn" title="Dán từ clipboard">📋 Dán</button>
+    <button class="fetch-btn" id="fetchBtn">Lấy HTML</button>
+  </div>
+
+  <div class="history" id="history"></div>
+
+  <div class="info-box">
+    <strong>ℹ️ Lưu ý</strong>
+    Trình duyệt chặn đọc mã nguồn từ trang khác do chính sách CORS, nên trang này phải dùng proxy trung gian để tải. Một số trang chặn proxy (Google, Facebook, Cloudflare…) sẽ không lấy được — hãy thử URL khác.
+  </div>
+
+  <div class="status" id="status"></div>
+
+  <div class="toolbar" id="toolbar" style="display:none;">
+    <button id="copyBtn">📋 Copy</button>
+    <button id="downloadBtn">💾 Tải .html</button>
+    <button id="openBtn">🔗 Mở tab mới</button>
+    <span class="stats" id="stats"></span>
+  </div>
+
+  <div class="empty" id="empty">Chưa có dữ liệu — hãy nhập link và bấm "Lấy HTML"</div>
+  <div class="code-wrap" id="codeWrap"><pre id="codeArea"></pre></div>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+const KEY_HISTORY = 'wsv_history_v1';
+const MAX_HISTORY = 8;
+const MAX_HIGHLIGHT = 800 * 1024;
+
+let currentHtml = '';
+let currentUrl = '';
+
+let toastTimer;
+function toast(msg){
+  const el = $('#toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+function setStatus(type, text){
+  const el = $('#status');
+  el.className = 'status' + (type ? ' ' + type : '');
+  if(type === 'loading'){
+    el.innerHTML = '<span class="spinner"></span>' + esc(text);
+  } else {
+    el.textContent = text;
+  }
+}
+
+function timeoutSignal(ms){
+  if(AbortSignal.timeout) return AbortSignal.timeout(ms);
+  const c = new AbortController();
+  setTimeout(() => c.abort(), ms);
+  return c.signal;
+}
+
+const PROXIES = [
+  { name:'allorigins', build: u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}` },
+  { name:'codetabs',   build: u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}` },
+  { name:'allorigins-json', build: u => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`, json:true }
+];
+
+async function fetchViaProxies(url){
+  for(const p of PROXIES){
+    try{
+      const res = await fetch(p.build(url), { signal: timeoutSignal(20000) });
+      if(!res.ok) throw new Error('HTTP ' + res.status);
+      let html;
+      if(p.json){
+        const data = await res.json();
+        html = data && data.contents;
+      } else {
+        html = await res.text();
+      }
+      if(!html || html.length < 20) throw new Error('Nội dung rỗng');
+      return { html, via: p.name };
+    }catch(e){
+      console.warn('[proxy]', p.name, e);
+    }
+  }
+  throw new Error('Không thể tải. Thử lại sau hoặc dùng URL khác.');
+}
+
+function normalizeUrl(input){
+  let u = input.trim();
+  if(!u) return '';
+  if(!/^https?:\/\//i.test(u)) u = 'https://' + u;
+  return u;
+}
+
+function highlight(src){
+  if(src.length > MAX_HIGHLIGHT) return esc(src);
+  const s = esc(src);
+  return s.replace(/(&lt;!--[\s\S]*?--&gt;)|(&lt;\/?[a-zA-Z][\w:-]*)/g, (m, c, t) => {
+    if(c) return '<span class="t-comment">' + c + '</span>';
+    return '<span class="t-tag">' + t + '</span>';
+  });
+}
+
+function showResult(html, url, via){
+  currentHtml = html;
+  currentUrl = url;
+
+  $('#empty').style.display = 'none';
+  $('#toolbar').style.display = 'flex';
+  $('#codeWrap').classList.add('active');
+  $('#codeArea').innerHTML = highlight(html);
+
+  const sizeKB = (new Blob([html]).size / 1024).toFixed(1);
+  const lines = html.split('\n').length;
+  $('#stats').textContent = `${sizeKB} KB · ${lines.toLocaleString('vi-VN')} dòng · qua ${via}`;
+
+  saveHistory(url);
+  renderHistory();
+
+  if(window.innerWidth < 700){
+    $('#codeWrap').scrollIntoView({ behavior:'smooth', block:'start' });
+  }
+}
+
+function clearResult(){
+  currentHtml = '';
+  $('#empty').style.display = 'block';
+  $('#toolbar').style.display = 'none';
+  $('#codeWrap').classList.remove('active');
+  $('#codeArea').innerHTML = '';
+}
+
+async function handleFetch(){
+  const url = normalizeUrl($('#urlInput').value);
+  if(!url){
+    setStatus('error', 'Vui lòng nhập link trang web');
+    return;
+  }
+  const btn = $('#fetchBtn');
+  btn.disabled = true;
+  setStatus('loading', 'Đang tải...');
+
+  try{
+    const { html, via } = await fetchViaProxies(url);
+    setStatus('ok', `✓ Tải thành công (${via})`);
+    showResult(html, url, via);
+  }catch(e){
+    setStatus('error', '✗ ' + e.message);
+    clearResult();
+  }finally{
+    btn.disabled = false;
+  }
+}
+
+function getHistory(){
+  try{ return JSON.parse(localStorage.getItem(KEY_HISTORY)) || []; }catch{ return []; }
+}
+function saveHistory(url){
+  let list = getHistory().filter(u => u !== url);
+  list.unshift(url);
+  list = list.slice(0, MAX_HISTORY);
+  localStorage.setItem(KEY_HISTORY, JSON.stringify(list));
+}
+function renderHistory(){
+  const el = $('#history');
+  el.innerHTML = '';
+  getHistory().forEach(u => {
+    const btn = document.createElement('button');
+    btn.className = 'history-chip';
+    btn.textContent = u;
+    btn.title = u;
+    btn.addEventListener('click', () => {
+      $('#urlInput').value = u;
+      handleFetch();
+    });
+    el.appendChild(btn);
+  });
+}
+
+$('#fetchBtn').addEventListener('click', handleFetch);
+$('#urlInput').addEventListener('keydown', e => { if(e.key === 'Enter') handleFetch(); });
+
+$('#pasteBtn').addEventListener('click', async () => {
+  try{
+    const text = await navigator.clipboard.readText();
+    $('#urlInput').value = text.trim();
+    $('#urlInput').focus();
+  }catch{
+    toast('Không đọc được clipboard. Hãy dán thủ công (Ctrl+V)');
+  }
+});
+
+$('#copyBtn').addEventListener('click', async () => {
+  if(!currentHtml) return;
+  try{
+    await navigator.clipboard.writeText(currentHtml);
+    toast('Đã copy HTML vào clipboard');
+  }catch{
+    toast('Không copy được. Chọn toàn bộ rồi Ctrl+C');
+  }
+});
+
+$('#downloadBtn').addEventListener('click', () => {
+  if(!currentHtml) return;
+  const blob = new Blob([currentHtml], { type:'text/html;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'page-source.html';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  toast('Đã tải page-source.html');
+});
+
+$('#openBtn').addEventListener('click', () => {
+  if(!currentHtml) return;
+  const blob = new Blob([currentHtml], { type:'text/html;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  window.open(url, '_blank');
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+});
+
+renderHistory();
+</script>
+</body>
+  </html>
